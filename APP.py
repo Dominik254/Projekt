@@ -1,104 +1,168 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Sep  3 19:06:22 2026
-
-@author: kubak
-"""
-
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
 import math
+import pandas as pd
 
-# Konfiguracja strony Streamlit na szerszą
-st.set_page_config(layout="wide", page_title="Symulacja Napylania")
+st.set_page_config(layout="wide", page_title="Symulacja Napylania z Podcięciem")
 
-st.title("Symulacja geometrii napylania")
-
-# --- INTERFEJS: SUWAKI (podzielone na kolumny jak na zdjęciu) ---
+# --- INTERFEJS: SUWAKI (dokładnie jak na zdjęciu) ---
 col1, col2 = st.columns(2)
 
 with col1:
-    alpha = st.slider("Kąt \u03B1 [deg]", 0, 45, 20, 1)
-    h = st.slider("Grubość h [\u03BCm]", 0.5, 2.5, 1.25, 0.05)
-    x1 = st.slider("x1 (open1 lewy) [\u03BCm]", 0.0, 1.2, 0.4, 0.02)
-    x4 = st.slider("x4 (open2 lewy) [\u03BCm]", 1.2, 2.7, 2.0, 0.02)
-    xmax = st.slider("xmax [\u03BCm]", 2.5, 5.0, 3.6, 0.1)
+    alpha = st.slider("alpha [deg]", 0, 45, 25, 1)
+    p_mma_maa = st.slider("P(MMA-MAA) [\u03BCm]", 0.1, 2.0, 0.67, 0.01)
+    undercut = st.slider("undercut [\u03BCm]", 0.0, 1.0, 0.20, 0.01)
+    open_1 = st.slider("open 1 [\u03BCm]", 0.1, 2.0, 0.89, 0.01)
+    margin = st.slider("margin [\u03BCm]", 0.1, 2.0, 0.55, 0.01)
 
 with col2:
-    beta = st.slider("Kąt \u03B2 [deg]", 0, 45, 20, 1)
-    mma = st.slider("Poziom MMA [\u03BCm]", 0.2, 2.0, 1.4, 0.05)
-    x2 = st.slider("x2 (open1 prawy) [\u03BCm]", 0.5, 1.8, 1.1, 0.02)
-    x5 = st.slider("x5 (open2 prawy) [\u03BCm]", 2.0, 3.5, 2.6, 0.02)
+    beta = st.slider("beta [deg]", 0, 45, 20, 1)
+    pmma_h = st.slider("PMMA [\u03BCm]", 0.1, 2.0, 0.28, 0.01)
+    gap_pmma_input = st.slider("gap PMMA [\u03BCm]", 0.05, 1.0, 0.16, 0.01)
+    open_2 = st.slider("open 2 [\u03BCm]", 0.1, 2.0, 0.75, 0.01)
 
-# --- OBLICZENIA FIZYCZNE ---
-# Przeliczenie stopni na radiany do funkcji trygonometrycznych
+# --- MAPOWANIE GEOMETRII (z szerokości na współrzędne x) ---
+x1 = margin
+x2 = x1 + open_1
+x4 = x2 + gap_pmma_input
+x5 = x4 + open_2
+xmax = x5 + margin
+
+h = p_mma_maa + pmma_h
+mma = p_mma_maa
+
 alpha_rad = math.radians(alpha)
 beta_rad = math.radians(beta)
 
-# Wyliczenie przemieszczenia krawędzi snopów
-x3 = x2 + h * math.tan(alpha_rad)
-x6 = x4 - h * math.tan(beta_rad)
+# --- LOGIKA CIENIOWANIA I FOOTPRINTÓW (Ray-tracing) ---
+# Snop 1 (Lewy): 
+# - Zewnętrzna (lewa) krawędź uderza w górny lewy róg PMMA (x1, h)
+b1_L = x1 + h * math.tan(alpha_rad)
+# - Wewnętrzna (prawa) krawędź opiera się o dolny prawy róg PMMA (x2, mma)
+b1_R = x2 + mma * math.tan(alpha_rad)
 
-# Współrzędne wierzchołków dla trapezów (snopów)
-beam1_pts = np.array([[x1, h], [x2, h], [x3, 0], [x1 + (x3 - x2), 0]])
-beam2_pts = np.array([[x4, h], [x5, h], [x5 - (x4 - x6), 0], [x6, 0]])
+# Snop 2 (Prawy): 
+# - Wewnętrzna (lewa) krawędź opiera się o dolny lewy róg PMMA (x4, mma)
+b2_L = x4 - mma * math.tan(beta_rad)
+# - Zewnętrzna (prawa) krawędź uderza w górny prawy róg PMMA (x5, h)
+b2_R = x5 - h * math.tan(beta_rad)
+
+# Zmienne diagnostyczne
+overlap_L = max(b1_L, b2_L)
+overlap_R = min(b1_R, b2_R)
+overlap_val = max(0.0, overlap_R - overlap_L) * 1000
+
+pozostala_szczelina = max(0.0, b2_L - b1_R) * 1000
+gap_w_pmma = gap_pmma_input * 1000
+gap_w_pmma_maa = max(0.0, gap_pmma_input - 2 * undercut) * 1000
 
 # --- RYSOWANIE WYKRESU (Matplotlib) ---
 fig, ax = plt.subplots(figsize=(10, 6))
 
-# 1. Szaroniebieski pas PMMA
-pmma_rect = patches.Rectangle((0, mma), xmax, 0.15, facecolor='#B3BFCB', edgecolor='gray', linewidth=1)
-ax.add_patch(pmma_rect)
+c_pmma = '#D5D8DC'
+c_pmma_maa = '#AED6F1'
 
-# 2. Podłoże krzemowe
-ax.plot([0, xmax], [0, 0], color='black', linewidth=3)
+# 1. Tło i podłoże
+ax.add_patch(patches.Rectangle((-0.5, -0.2), xmax + 1.0, 0.2, facecolor='#EAEAEA', edgecolor='black'))
+ax.plot([-0.5, xmax + 1.0], [0, 0], color='black', linewidth=2)
 
-# 3. Różowe/pomarańczowe snopy napylania (zależne od kątów)
-beam1 = patches.Polygon(beam1_pts, closed=True, facecolor='#D91A80', alpha=0.85)
-beam2 = patches.Polygon(beam2_pts, closed=True, facecolor='#D91A80', alpha=0.85)
-ax.add_patch(beam1)
-ax.add_patch(beam2)
+# 2. Warstwa podcięcia P(MMA-MAA) (Niebieska)
+ax.add_patch(patches.Rectangle((0, 0), x1 - undercut, mma, facecolor=c_pmma_maa, edgecolor='black', linewidth=1))
+if gap_w_pmma_maa > 0:
+    ax.add_patch(patches.Rectangle((x2 + undercut, 0), gap_w_pmma_maa / 1000, mma, facecolor=c_pmma_maa, edgecolor='black', linewidth=1))
+ax.add_patch(patches.Rectangle((x5 + undercut, 0), xmax - x5 + undercut, mma, facecolor=c_pmma_maa, edgecolor='black', linewidth=1))
 
-# 4. Linie pionowe z otworów
-ax.plot([x2, x2], [0, h], color='black', linestyle='-')
-ax.plot([x4, x4], [0, h], color='black', linestyle='-')
+# 3. Warstwa górna PMMA (Szara)
+ax.add_patch(patches.Rectangle((0, mma), x1, pmma_h, facecolor=c_pmma, edgecolor='black', linewidth=1))
+ax.add_patch(patches.Rectangle((x2, mma), x4 - x2, pmma_h, facecolor=c_pmma, edgecolor='black', linewidth=1))
+ax.add_patch(patches.Rectangle((x5, mma), xmax - x5, pmma_h, facecolor=c_pmma, edgecolor='black', linewidth=1))
 
-# 5. Łuki kątów alpha i beta
-arc1 = patches.Arc((x2, h), 0.7, 0.7, angle=0, theta1=-90, theta2=-90+alpha, color='black')
-arc2 = patches.Arc((x4, h), 0.7, 0.7, angle=0, theta1=-90-beta, theta2=-90, color='black')
-ax.add_patch(arc1)
-ax.add_patch(arc2)
+# Napisy na warstwach
+ax.text(0.1, mma + pmma_h/2, "PMMA", va='center', fontweight='bold', fontsize=9)
+ax.text(0.1, mma/2, "P(MMA-MAA)", va='center', fontweight='bold', fontsize=9)
 
-# Tekst kątów
-ax.text(x2 + 0.1, h - 0.25, r'$\alpha$', fontsize=12, style='italic')
-ax.text(x4 - 0.2, h - 0.25, r'$\beta$', fontsize=12, style='italic')
+# 4. Geometria snopów
+line_y = h + 0.3
 
-# 6. Etykiety otworów
-ax.text((x1 + x2)/2, mma + 0.07, "open1", fontsize=10, ha='center')
-ax.text((x2 + x4)/2, mma + 0.07, "gap", fontsize=10, ha='center')
-ax.text((x4 + x5)/2, mma + 0.07, "open2", fontsize=10, ha='center')
+# Snop 1 (Niebieski)
+x2_top = x2 - pmma_h * math.tan(alpha_rad)
+beam1_poly = np.array([[x1, h], [x2_top, h], [b1_R, 0], [b1_L, 0]])
+ax.add_patch(patches.Polygon(beam1_poly, facecolor='#A9CFF0', alpha=0.5))
 
-# 7. Wysokość h po prawej
-ax.plot([xmax + 0.1, xmax + 0.1], [0, h], color='black')
-ax.text(xmax + 0.2, h/2, 'h', fontsize=12, style='italic')
+line1_x1_top = b1_L - line_y * math.tan(alpha_rad)
+ax.plot([b1_L, line1_x1_top], [0, line_y], color='#1C4587', linewidth=2)
+line1_x2_top = b1_R - line_y * math.tan(alpha_rad)
+ax.plot([b1_R, line1_x2_top], [0, line_y], color='#1C4587', linewidth=2)
 
-# 8. Linie wymiarowe na dole
-ax.plot([x2, x2], [0, -0.25], 'k--')
-ax.plot([x3, x3], [0, -0.45], 'k--')
-ax.plot([x6, x6], [0, -0.45], 'k--')
-ax.plot([x4, x4], [0, -0.65], 'k--')
+# Snop 2 (Pomarańczowy)
+x4_top = x4 + pmma_h * math.tan(beta_rad)
+beam2_poly = np.array([[x4_top, h], [x5, h], [b2_R, 0], [b2_L, 0]])
+ax.add_patch(patches.Polygon(beam2_poly, facecolor='#F5CBA7', alpha=0.5))
 
-ax.text((x2 + x3)/2, -0.15, 'a', fontsize=10, style='italic', ha='center')
-ax.text((x3 + x6)/2, -0.35, 'b', fontsize=10, style='italic', ha='center')
-ax.text((x2 + x6)/2, -0.55, 'w', fontsize=10, style='italic', ha='center')
+line2_x4_top = b2_L + line_y * math.tan(beta_rad)
+ax.plot([b2_L, line2_x4_top], [0, line_y], color='#D35400', linewidth=2)
+line2_x5_top = b2_R + line_y * math.tan(beta_rad)
+ax.plot([b2_R, line2_x5_top], [0, line_y], color='#D35400', linewidth=2)
 
-# Ustawienia osi i limitów wykresu
-ax.set_xlim(-0.2, xmax + 0.4)
-ax.set_ylim(-0.8, h + 0.25)
-ax.set_xlabel(r"$\mu m$")
+# Grube linie footprintów i overlapu na podłożu
+ax.plot([b1_L, b1_R], [0.03, 0.03], color='blue', linewidth=6)
+ax.plot([b2_L, b2_R], [0.03, 0.03], color='#D35400', linewidth=6)
+if overlap_val > 0:
+    ax.plot([overlap_L, overlap_R], [0.06, 0.06], color='magenta', linewidth=8)
+
+# Kropki graniczne (punkty załamania cienia)
+ax.plot(x1, h, 'ko', markersize=6)
+ax.plot(x2, mma, 'ko', markersize=6)
+ax.plot(x4, mma, 'ko', markersize=6)
+ax.plot(x5, h, 'ko', markersize=6)
+
+# Etykiety wymiarowe
+ax.text((x1 + x2)/2, h + 0.05, "open 1", ha='center', fontsize=10)
+ax.text((x2 + x4)/2, h + 0.05, "gap PMMA", ha='center', fontsize=10)
+ax.text((x4 + x5)/2, h + 0.05, "open 2", ha='center', fontsize=10)
+
+ax.set_xlim(-0.1, xmax + 0.1)
+ax.set_ylim(-0.2, h + 0.4)
+ax.set_xlabel("{PlotLabel x [\u03BCm], PlotLabel wysokosc [\u03BCm]} \u2192")
 ax.grid(False)
 
-# Wyświetlenie wykresu w Streamlit
 st.pyplot(fig)
+
+# --- TABELA DIAGNOSTYCZNA ---
+if overlap_val > 0:
+    status_str = "OVERLAP"
+elif pozostala_szczelina > 0:
+    status_str = "GAP"
+else:
+    status_str = "STYK"
+
+dane = {
+    "Parametr": [
+        "Gap w PMMA", "Gap w P(MMA-MAA)", "Dolne apertury polaczone?",
+        "Footprint napylania 1", "Footprint napylania 2",
+        "Wewnetrzna granica 1", "Wewnetrzna granica 2",
+        "Zewnetrzna granica 1", "Zewnetrzna granica 2",
+        "Overlap", "Pozostala szczelina", "STATUS"
+    ],
+    "Wartość": [
+        f"{gap_w_pmma:.1f} nm",
+        f"{gap_w_pmma_maa:.0f} nm",
+        "TAK" if gap_w_pmma_maa <= 0 else "NIE",
+        f"{(b1_R - b1_L)*1000:.1f} nm",
+        f"{(b2_R - b2_L)*1000:.1f} nm",
+        "PMMA: dolny prawy naroznik",
+        "PMMA: dolny lewy naroznik",
+        "PMMA: gorny lewy naroznik",
+        "PMMA: gorny prawy naroznik",
+        f"{overlap_val:.1f} nm",
+        f"{pozostala_szczelina:.0f} nm",
+        status_str
+    ]
+}
+
+df = pd.DataFrame(dane)
+
+st.markdown("### Diagnostyka geometrii")
+st.dataframe(df, hide_index=True, use_container_width=True)
