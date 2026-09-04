@@ -1,0 +1,44 @@
+1)
+Patrząc na użyte w programie biblioteki po kolei od góry widnieją: streamlit - jest to biblioteka służąca do stworzenia iterfejsu aplikacji internetowej w Pythonie, 
+matplotlib.pyplot, która odpowiada za tworzenie wykresów, matplotlib.patches ,dzięki której możliwe jest rysowanie figur geometrycznych, numpy czyli biblioteka używana 
+do obliczeń numerycznych i pracy na tablicach, math czyli standardowa biblioteka matematyczna Pythona oraz pandas, której użyto przy pracy z tabelami danych.
+
+2)
+Na początku kodu znajdują się funkcje:
+st.set_page_config() - odpowiadająca za konfiguracje strony,
+st.columns() - która w tym przypadku tworzy dwie kolumny wypełnione suwakami odpowiadającymi poszczególnym parametrą,
+st.slider() - tworząca suwaki do zmiany parametrów.
+
+3)
+Przechodząc przez określenie części z wykorzystanych zmiennych, pojawiają się funkcje matematyczne:
+math.radians() - przeliczająca wartości ze stopni na radiany,
+math.tan() - obliczająca tangens kąta
+
+4)
+Dalej program oblicza overlap i sprawdza czy obszary napylania mają część wspólną, czy wsytępuje pomiędzy nimi szczelina. Następnie tworzony jest wykres o wymiarach 10x6:
+fig – tworzy całe płótno(figurę),
+ax – tworzy układ współrzędnych,
+plt.subplots() - tworzy wykres.
+
+5)
+Następnie tworzone oraz dodawane są odpowiednie elementy wykresu:
+ax.add_patch() - służy do dodania figur geometrycznych do wykresu,
+patches.Rectangle() - tworzy prostokąt o konkretnych parametrach,
+ax.plot() - rysuje linie,
+ax.text() - dodaje napisy,
+patches.Polygon() - tworzy wielokąty,
+np.array() - zamienia listę punktów na tablicę NumPy.
+
+6)
+Tutaj z kolei:
+ax.plot() - rysuje punkty,
+ax.set_xlim() - określa zakres osi X,
+ax.set_ylim() - określa zakres osi Y,
+ax.set_xlabel(...) - ustawia opis osi X,
+ax.grid(False) - wyłącza sietkę.
+
+7) 
+Na koniec pojawiają się funkcje:
+pd.DataFrame() - która tworzy tabelę Pandas z wcześniej przygotowanego słownika (dane),
+st.markdown() - wyświetla tekst w aplikacji,
+st.dataframe() - wyświetla tabelę.
