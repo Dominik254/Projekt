@@ -35,6 +35,8 @@ alpha_rad = math.radians(alpha)
 beta_rad = math.radians(beta)
 
 b1_L = x1 + h * math.tan(alpha_rad)
+b1_L = x1 + h * math.tan(alpha_rad)
+
 b1_R = x2 + mma * math.tan(alpha_rad)
 
 b2_L = x4 - mma * math.tan(beta_rad)
