@@ -50,7 +50,7 @@ pozostala_szczelina = max(0.0, b2_L - b1_R) * 1000
 gap_w_pmma = gap_pmma_input * 1000
 gap_w_pmma_maa = max(0.0, gap_pmma_input - 2 * undercut) * 1000
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(5, 3))
 
 c_pmma = '#D5D8DC'
 c_pmma_maa = '#AED6F1'
